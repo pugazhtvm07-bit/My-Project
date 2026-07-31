@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ROW-11 — SIEM Ingestion Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0e12;
+    --panel:#10161c;
+    --panel-2:#151c23;
+    --line:#232d36;
+    --amber:#ffb454;
+    --amber-dim:#7a5a2e;
+    --cyan:#5eead4;
+    --red:#ff6b6b;
+    --text:#dbe4ea;
+    --text-dim:#7d8b96;
+    --text-dimmer:#4c5860;
+    --mono:'IBM Plex Mono', ui-monospace, monospace;
+    --sans:'Space Grotesk', system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{background:var(--amber);color:#0a0e12;}
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-track{background:var(--panel);}
+  ::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px;}
+
+  /* ---------- top pulse strip ---------- */
+  #pulse-strip{
+    width:100%;
+    height:46px;
+    background:linear-gradient(180deg,#0d1319,#0a0e12);
+    border-bottom:1px solid var(--line);
+    position:relative;
+    overflow:hidden;
+  }
+  #pulse-canvas{width:100%;height:100%;display:block;}
+
+  /* ---------- header ---------- */
+  header{
+    padding:28px clamp(16px,4vw,48px) 18px;
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    flex-wrap:wrap;
+    gap:16px;
+    border-bottom:1px solid var(--line);
+  }
+  .brand-eyebrow{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.18em;
+    color:var(--amber);
+    text-transform:uppercase;
+    margin:0 0 6px;
+  }
+  h1{
+    margin:0;
+    font-size:clamp(24px,3.2vw,34px);
+    font-weight:700;
+    letter-spacing:-0.01em;
+  }
+  h1 span{color:var(--text-dim);font-weight:500;}
+  .header-meta{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--text-dim);
+    display:flex;
+    gap:22px;
+    flex-wrap:wrap;
+  }
+  .header-meta b{color:var(--cyan);font-weight:600;}
+  .status-dot{
+    display:inline-block;width:7px;height:7px;border-radius:50%;
+    background:var(--cyan);margin-right:6px;
+    box-shadow:0 0 8px var(--cyan);
+    animation:blink 2s ease-in-out infinite;
+  }
+  @keyframes blink{0%,100%{opacity:1;}50%{opacity:.35;}}
+
+  main{
+    max-width:1400px;
+    margin:0 auto;
+    padding:32px clamp(16px,4vw,48px) 80px;
+    display:grid;
+    gap:24px;
+  }
+
+  .section-label{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color:var(--text-dimmer);
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:14px;
+  }
+  .section-label::after{
+    content:'';
+    flex:1;
+    height:1px;
+    background:var(--line);
+  }
+  .section-label .n{color:var(--amber);}
+
+  /* ---------- stat cards ---------- */
+  .stats-row{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+    gap:14px;
+  }
+  .stat-card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px 18px;
+    position:relative;
+    overflow:hidden;
+  }
+  .stat-card .label{
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--text-dim);
+    text-transform:uppercase;
+    letter-spacing:.08em;
+  }
+  .stat-card .value{
+    font-family:var(--mono);
+    font-size:30px;
+    font-weight:600;
+    margin-top:6px;
+    color:var(--text);
+  }
+  .stat-card.accent .value{color:var(--amber);}
+  .stat-card.good .value{color:var(--cyan);}
+  .stat-card.bad .value{color:var(--red);}
+  .stat-card .sub{font-size:11px;color:var(--text-dimmer);margin-top:4px;font-family:var(--mono);}
+
+  /* ---------- grid layout ---------- */
+  .grid-2{display:grid;grid-template-columns:1.1fr .9fr;gap:20px;}
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+  @media(max-width:900px){.grid-2{grid-template-columns:1fr;} .grid-3{grid-template-columns:1fr;}}
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:20px;
+  }
+  .card h3{
+    margin:0 0 4px;
+    font-size:15px;
+    font-weight:600;
+  }
+  .card .desc{
+    font-size:12px;
+    color:var(--text-dim);
+    margin:0 0 14px;
+    line-height:1.5;
+  }
+
+  /* ---------- collector cards ---------- */
+  .collector-card{
+    border-left:3px solid var(--line);
+    transition:border-color .2s;
+  }
+  .collector-card.live{border-left-color:var(--cyan);}
+  .collector-head{display:flex;justify-content:space-between;align-items:center;}
+  .tag{
+    font-family:var(--mono);
+    font-size:10px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    padding:3px 8px;
+    border-radius:99px;
+    border:1px solid var(--line);
+    color:var(--text-dim);
+  }
+  .tag.dot::before{content:'●';margin-right:5px;font-size:8px;color:var(--text-dimmer);}
+  .collector-card.live .tag.dot::before{color:var(--cyan);}
+  .btn{
+    font-family:var(--mono);
+    font-size:12px;
+    padding:8px 14px;
+    border-radius:7px;
+    border:1px solid var(--line);
+    background:var(--panel-2);
+    color:var(--text);
+    cursor:pointer;
+    transition:.15s;
+  }
+  .btn:hover{border-color:var(--text-dim);}
+  .btn.primary{background:var(--amber);color:#1a1206;border-color:var(--amber);font-weight:600;}
+  .btn.primary:hover{background:#ffc472;}
+  .btn.ghost{background:transparent;}
+  .btn.small{padding:5px 10px;font-size:11px;}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+  .collector-actions{display:flex;gap:8px;margin-top:14px;}
+  .eps-readout{
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--text-dimmer);
+    margin-top:10px;
+  }
+  .eps-readout b{color:var(--text);}
+
+  /* ---------- parser rules ---------- */
+  .grok-rule{margin-bottom:16px;}
+  .grok-rule:last-child{margin-bottom:0;}
+  .grok-rule .src{
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--amber);
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    margin-bottom:6px;
+  }
+  pre.code{
+    background:#0d1319;
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:10px 12px;
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--cyan);
+    overflow-x:auto;
+    white-space:pre;
+    margin:0;
+    line-height:1.6;
+  }
+  pre.code .field{color:var(--amber);}
+
+  /* ---------- manual ingest ---------- */
+  textarea, select, input[type=number]{
+    font-family:var(--mono);
+    font-size:12px;
+    background:#0d1319;
+    border:1px solid var(--line);
+    color:var(--text);
+    border-radius:7px;
+    padding:9px 10px;
+    width:100%;
+  }
+  textarea{resize:vertical;min-height:78px;}
+  label.field-label{
+    font-family:var(--mono);
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:var(--text-dimmer);
+    display:block;
+    margin-bottom:6px;
+  }
+  .row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;}
+  .row > div{flex:1;min-width:140px;}
+
+  .ingest-result{
+    margin-top:14px;
+    border-top:1px dashed var(--line);
+    padding-top:14px;
+  }
+  .ingest-result.hidden{display:none;}
+  .verdict{
+    font-family:var(--mono);
+    font-size:11px;
+    font-weight:600;
+    padding:4px 9px;
+    border-radius:5px;
+    display:inline-block;
+    margin-bottom:8px;
+  }
+  .verdict.ok{background:rgba(94,234,212,.12);color:var(--cyan);}
+  .verdict.fail{background:rgba(255,107,107,.12);color:var(--red);}
+
+  /* ---------- table ---------- */
+  .table-wrap{max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:8px;}
+  table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11.5px;}
+  thead th{
+    position:sticky;top:0;
+    background:var(--panel-2);
+    text-align:left;
+    padding:9px 10px;
+    color:var(--text-dim);
+    text-transform:uppercase;
+    letter-spacing:.05em;
+    font-size:10px;
+    border-bottom:1px solid var(--line);
+    z-index:1;
+  }
+  tbody td{
+    padding:8px 10px;
+    border-bottom:1px solid #151c23;
+    color:var(--text);
+    white-space:nowrap;
+    max-width:260px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  tbody tr:hover{background:#131a20;}
+  .badge{padding:2px 7px;border-radius:5px;font-size:10px;text-transform:uppercase;letter-spacing:.04em;}
+  .badge.syslog{background:rgba(94,234,212,.12);color:var(--cyan);}
+  .badge.windows{background:rgba(255,180,84,.12);color:var(--amber);}
+  .badge.app_json{background:rgba(180,140,255,.14);color:#b48cff;}
+  .badge.err{background:rgba(255,107,107,.14);color:var(--red);}
+  .empty-row td{color:var(--text-dimmer);text-align:center;padding:28px;white-space:normal;}
+
+  /* ---------- chart ---------- */
+  .chart-legend{display:flex;gap:18px;margin-top:10px;flex-wrap:wrap;}
+  .chart-legend div{font-family:var(--mono);font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:6px;}
+  .swatch{width:9px;height:9px;border-radius:2px;}
+
+  /* ---------- throughput panel ---------- */
+  .throughput-result{
+    margin-top:16px;
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:10px;
+  }
+  @media(max-width:700px){.throughput-result{grid-template-columns:repeat(2,1fr);}}
+  .tp-cell{
+    background:#0d1319;
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:12px;
+  }
+  .tp-cell .k{font-family:var(--mono);font-size:10px;color:var(--text-dimmer);text-transform:uppercase;}
+  .tp-cell .v{font-family:var(--mono);font-size:19px;font-weight:600;margin-top:4px;}
+  .progress-track{
+    height:6px;background:#0d1319;border-radius:99px;overflow:hidden;margin-top:12px;border:1px solid var(--line);
+  }
+  .progress-fill{height:100%;width:0%;background:var(--amber);transition:width .1s linear;}
+
+  footer{
+    text-align:center;
+    padding:26px;
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--text-dimmer);
+    border-top:1px solid var(--line);
+  }
+</style>
+</head>
+<body>
+
+<div id="pulse-strip"><canvas id="pulse-canvas"></canvas></div>
+
+<header>
+  <div>
+    <p class="brand-eyebrow">ROW-11 · ingestion layer</p>
+    <h1>Signal<span>Room</span> — SIEM Ingestion Console</h1>
+  </div>
+  <div class="header-meta">
+    <span><span class="status-dot"></span>collectors <b id="live-collector-count">0</b> live</span>
+    <span>schema <b>ecs-like v1.0</b></span>
+    <span>events buffered <b id="header-buffered">0</b></span>
+  </div>
+</header>
+
+<main>
+
+  <!-- ================= STATS ================= -->
+  <section>
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="label">Total Received</div>
+        <div class="value" id="stat-total">0</div>
+        <div class="sub">since page load</div>
+      </div>
+      <div class="stat-card good">
+        <div class="label">Normalized OK</div>
+        <div class="value" id="stat-ok">0</div>
+        <div class="sub" id="stat-ok-pct">—</div>
+      </div>
+      <div class="stat-card bad">
+        <div class="label">Dead-lettered</div>
+        <div class="value" id="stat-dlq">0</div>
+        <div class="sub" id="stat-dlq-pct">—</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="label">Peak Throughput</div>
+        <div class="value" id="stat-peak-eps">0</div>
+        <div class="sub">events / sec</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= COLLECTORS ================= -->
+  <section>
+    <div class="section-label"><span class="n">01</span> multi-source collectors</div>
+    <div class="grid-3">
+
+      <div class="card collector-card" id="collector-syslog">
+        <div class="collector-head">
+          <h3>Syslog</h3>
+          <span class="tag dot" id="collector-syslog-tag">idle</span>
+        </div>
+        <p class="desc">RFC3164 UDP-style network device &amp; firewall feed.</p>
+        <div class="collector-actions">
+          <button class="btn primary small" onclick="toggleCollector('syslog')" id="collector-syslog-btn">Start stream</button>
+          <button class="btn ghost small" onclick="injectOne('syslog')">Inject one</button>
+        </div>
+        <div class="eps-readout">received: <b id="collector-syslog-count">0</b></div>
+      </div>
+
+      <div class="card collector-card" id="collector-windows">
+        <div class="collector-head">
+          <h3>Windows Event Log</h3>
+          <span class="tag dot" id="collector-windows-tag">idle</span>
+        </div>
+        <p class="desc">JSON export from WEC / Sysmon security channel.</p>
+        <div class="collector-actions">
+          <button class="btn primary small" onclick="toggleCollector('windows')" id="collector-windows-btn">Start stream</button>
+          <button class="btn ghost small" onclick="injectOne('windows')">Inject one</button>
+        </div>
+        <div class="eps-readout">received: <b id="collector-windows-count">0</b></div>
+      </div>
+
+      <div class="card collector-card" id="collector-app_json">
+        <div class="collector-head">
+          <h3>App JSON</h3>
+          <span class="tag dot" id="collector-app_json-tag">idle</span>
+        </div>
+        <p class="desc">Structured application logs shipped from microservices.</p>
+        <div class="collector-actions">
+          <button class="btn primary small" onclick="toggleCollector('app_json')">Start stream</button>
+          <button class="btn ghost small" onclick="injectOne('app_json')">Inject one</button>
+        </div>
+        <div class="eps-readout">received: <b id="collector-app_json-count">0</b></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ================= PARSER RULES + MANUAL INGEST ================= -->
+  <section>
+    <div class="section-label"><span class="n">02</span> parser / grok rules &amp; manual ingest</div>
+    <div class="grid-2">
+
+      <div class="card">
+        <h3>Grok-style extraction rules</h3>
+        <p class="desc">Each source has a dedicated pattern. A miss on the pattern (or a required field) routes straight to the dead-letter queue.</p>
+
+        <div class="grok-rule">
+          <div class="src">syslog · RFC3164</div>
+          <pre class="code">^&lt;<span class="field">PRI</span>&gt;(<span class="field">MONTH</span>\s+<span class="field">DAY</span>\s<span class="field">TIME</span>)\s(<span class="field">HOST</span>)\s(<span class="field">PROCESS</span>)(\[<span class="field">PID</span>\])?:\s(<span class="field">MESSAGE</span>)$</pre>
+        </div>
+        <div class="grok-rule">
+          <div class="src">windows · event JSON</div>
+          <pre class="code">requires: <span class="field">EventID</span>, <span class="field">Computer</span>, <span class="field">TimeCreated</span>, <span class="field">Level</span>, <span class="field">Message</span></pre>
+        </div>
+        <div class="grok-rule">
+          <div class="src">app_json · service log</div>
+          <pre class="code">requires: <span class="field">ts</span>, <span class="field">level</span>, <span class="field">service</span>, <span class="field">msg</span></pre>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Manual ingest</h3>
+        <p class="desc">Paste a raw log line to see it parsed, normalized against the common schema, and validated live.</p>
+        <div class="row">
+          <div>
+            <label class="field-label">Source type</label>
+            <select id="manual-source">
+              <option value="syslog">syslog</option>
+              <option value="windows">windows</option>
+              <option value="app_json">app_json</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label">Quick fill</label>
+            <select id="manual-quickfill" onchange="quickFill()">
+              <option value="">— sample —</option>
+              <option value="good">Well-formed sample</option>
+              <option value="bad">Malformed sample</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:10px;">
+          <label class="field-label">Raw log</label>
+          <textarea id="manual-raw" placeholder="Paste a raw log line here…"></textarea>
+        </div>
+        <div class="collector-actions">
+          <button class="btn primary small" onclick="manualIngest()">Ingest &amp; normalize</button>
+          <button class="btn ghost small" onclick="clearManual()">Clear</button>
+        </div>
+
+        <div class="ingest-result hidden" id="manual-result">
+          <span class="verdict" id="manual-verdict"></span>
+          <pre class="code" id="manual-output" style="margin-top:8px;max-height:220px;overflow:auto;"></pre>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ================= THROUGHPUT TEST ================= -->
+  <section>
+    <div class="section-label"><span class="n">03</span> throughput test</div>
+    <div class="card">
+      <h3>Load the pipeline</h3>
+      <p class="desc">Generates a synthetic mixed-source corpus (~5% deliberately malformed) and runs it through parse → normalize → validate, measured wall-clock.</p>
+      <div class="row">
+        <div>
+          <label class="field-label">Event count</label>
+          <select id="tp-count">
+            <option value="1000">1,000</option>
+            <option value="10000" selected>10,000</option>
+            <option value="50000">50,000</option>
+            <option value="200000">200,000</option>
+          </select>
+        </div>
+        <div style="flex:0;">
+          <button class="btn primary" onclick="runThroughputTest()" id="tp-run-btn">Run test</button>
+        </div>
+      </div>
+      <div class="progress-track"><div class="progress-fill" id="tp-progress"></div></div>
+      <div class="throughput-result">
+        <div class="tp-cell"><div class="k">Events / sec</div><div class="v" id="tp-eps">—</div></div>
+        <div class="tp-cell"><div class="k">Elapsed</div><div class="v" id="tp-elapsed">—</div></div>
+        <div class="tp-cell"><div class="k">Normalized</div><div class="v" id="tp-ok">—</div></div>
+        <div class="tp-cell"><div class="k">Dead-lettered</div><div class="v" id="tp-fail">—</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= DASHBOARD ================= -->
+  <section>
+    <div class="section-label"><span class="n">04</span> ingestion dashboard</div>
+    <div class="grid-2">
+
+      <div class="card">
+        <h3>Volume by source</h3>
+        <p class="desc">Live share of normalized events, by collector.</p>
+        <svg id="bar-chart" width="100%" height="140" viewBox="0 0 560 140" preserveAspectRatio="none"></svg>
+        <div class="chart-legend">
+          <div><span class="swatch" style="background:var(--cyan)"></span>syslog</div>
+          <div><span class="swatch" style="background:var(--amber)"></span>windows</div>
+          <div><span class="swatch" style="background:#b48cff"></span>app_json</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Common schema (ECS-like)</h3>
+        <p class="desc">Every source normalizes down to this shape before it's queryable.</p>
+        <pre class="code" style="max-height:154px;overflow:auto;">{
+  "<span class="field">@timestamp</span>": ISO8601,
+  "<span class="field">ecs.version</span>": "1.0",
+  "<span class="field">event.dataset</span>": "syslog|windows|app_json",
+  "<span class="field">event.action</span>": string,
+  "<span class="field">event.outcome</span>": "success|failure|unknown",
+  "<span class="field">event.severity</span>": 0-7,
+  "<span class="field">log.level</span>": string,
+  "<span class="field">host.name</span>": string,
+  "<span class="field">source.ip</span>": string|null,
+  "<span class="field">user.name</span>": string|null,
+  "<span class="field">process.name</span>": string|null,
+  "<span class="field">message</span>": string
+}</pre>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <h3>Recent normalized events</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>@timestamp</th><th>dataset</th><th>host.name</th><th>event.action</th>
+            <th>outcome</th><th>user.name</th><th>message</th>
+          </tr></thead>
+          <tbody id="events-tbody">
+            <tr class="empty-row"><td colspan="7">No events yet — start a collector or run the throughput test.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <h3>Dead-letter queue</h3>
+      <p class="desc">Events that failed parsing or schema validation, kept with the reason so they can be fixed and replayed upstream.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>received</th><th>source guess</th><th>reason</th><th>raw</th>
+          </tr></thead>
+          <tbody id="dlq-tbody">
+            <tr class="empty-row"><td colspan="4">Dead-letter queue is empty.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </section>
+
+</main>
+
+<footer>signalroom ingestion console · in-browser simulation · reference ROW-11</footer>
+
+<script>
+/* =========================================================================
+   STATE
+   ========================================================================= */
+const state = {
+  total: 0,
+  ok: 0,
+  dlq: 0,
+  bySource: { syslog: 0, windows: 0, app_json: 0 },
+  peakEps: 0,
+  events: [],   // ring buffer of normalized events (most recent first)
+  dlqEvents: [] // ring buffer of dead-lettered raw entries
+};
+const MAX_ROWS = 200; // keep dashboard tables bounded
+
+const collectors = {
+  syslog:   { timer: null, count: 0 },
+  windows:  { timer: null, count: 0 },
+  app_json: { timer: null, count: 0 }
+};
+
+/* =========================================================================
+   SAMPLE DATA GENERATORS
+   ========================================================================= */
+const HOSTS = ['edge-fw01','edge-fw02','dc-core01','vpn-gw03','proxy-01'];
+const WIN_HOSTS = ['WIN-DC01','WIN-DC02','WKS-FIN-14','WKS-ENG-07'];
+const SERVICES = ['checkout-api','auth-svc','inventory-svc','payments-gw','notify-worker'];
+const USERS = ['jdoe','asmith','svc_backup','r.patel','m.nguyen','root'];
+const IPS = ['10.0.4.12','192.168.1.44','172.16.9.201','10.0.0.5','203.0.113.9'];
+const PROCS = ['sshd','sudo','cron','kernel','nginx'];
+
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+function pad(n){ return n.toString().padStart(2,'0'); }
+
+function fmtSyslogTime(d){
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${months[d.getMonth()]} ${d.getDate().toString().padStart(2,' ')} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function genSyslog(bad=false){
+  const d = new Date();
+  const pri = 8*Math.floor(Math.random()*8) + Math.floor(Math.random()*8);
+  const host = pick(HOSTS);
+  const proc = pick(PROCS);
+  const pid = 1000 + Math.floor(Math.random()*9000);
+  const messages = [
+    'Failed password for invalid user from '+pick(IPS)+' port 51422 ssh2',
+    'Accepted publickey for '+pick(USERS)+' from '+pick(IPS)+' port 51900 ssh2',
+    'session opened for user '+pick(USERS)+' by (uid=0)',
+    'CRON: (root) CMD (/usr/bin/backup.sh)',
+    'Connection closed by '+pick(IPS)+' port 443'
+  ];
+  const line = `<${pri}>${fmtSyslogTime(d)} ${host} ${proc}[${pid}]: ${pick(messages)}`;
+  if(bad) return line.replace(`<${pri}>`,''); // strip PRI -> breaks the pattern
+  return line;
+}
+
+function genWindows(bad=false){
+  const evt = pick([4624,4625,4688,4720,4104]);
+  const obj = {
+    EventID: evt,
+    Computer: pick(WIN_HOSTS),
+    TimeCreated: new Date().toISOString(),
+    Level: evt===4625 ? 'Warning' : 'Information',
+    Message: evt===4624 ? 'An account was successfully logged on.' :
+              evt===4625 ? 'An account failed to log on.' :
+              evt===4688 ? 'A new process has been created.' :
+              evt===4720 ? 'A user account was created.' : 'A script block was logged.',
+    User: pick(USERS),
+    IpAddress: pick(IPS)
+  };
+  if(bad) delete obj.Computer; // missing required field -> breaks validation
+  return JSON.stringify(obj);
+}
+
+function genAppJson(bad=false){
+  const level = pick(['info','info','info','warn','error']);
+  const obj = {
+    ts: new Date().toISOString(),
+    level: level,
+    service: pick(SERVICES),
+    msg: level==='error' ? 'payment authorization failed' :
+         level==='warn' ? 'retrying downstream call' : 'request completed',
+    user: pick(USERS),
+    ip: pick(IPS),
+    status: level==='error' ? 500 : 200
+  };
+  if(bad) return '{ "ts": "'+obj.ts+'", "level": "'+level+'"  service missing colon BROKEN JSON';
+  return JSON.stringify(obj);
+}
+
+const GENERATORS = { syslog: genSyslog, windows: genWindows, app_json: genAppJson };
+
+/* =========================================================================
+   PARSERS  (grok-like)  ->  raw string  =>  { fields }  or  throws
+   ========================================================================= */
+const SYSLOG_RE = /^<(\d{1,3})>([A-Za-z]{3}\s+\d{1,2}\s\d{2}:\d{2}:\d{2})\s(\S+)\s([\w\-\/.]+)(?:\[(\d+)\])?:\s(.*)$/;
+
+function parseSyslog(raw){
+  const m = raw.match(SYSLOG_RE);
+  if(!m) throw new Error('syslog pattern did not match (missing/garbled PRI or header)');
+  const [, pri, ts, host, proc, pid, message] = m;
+  const priNum = parseInt(pri,10);
+  const severity = priNum % 8;
+  const facility = Math.floor(priNum/8);
+  return { pri: priNum, severity, facility, ts, host, proc, pid, message };
+}
+
+function parseWindows(raw){
+  let obj;
+  try{ obj = JSON.parse(raw); } catch(e){ throw new Error('invalid JSON'); }
+  const required = ['EventID','Computer','TimeCreated','Level','Message'];
+  for(const f of required){
+    if(!(f in obj) || obj[f]===undefined || obj[f]===null || obj[f]==='') {
+      throw new Error(`missing required field "${f}"`);
+    }
+  }
+  return obj;
+}
+
+function parseAppJson(raw){
+  let obj;
+  try{ obj = JSON.parse(raw); } catch(e){ throw new Error('invalid JSON'); }
+  const required = ['ts','level','service','msg'];
+  for(const f of required){
+    if(!(f in obj) || obj[f]===undefined || obj[f]===null || obj[f]==='') {
+      throw new Error(`missing required field "${f}"`);
+    }
+  }
+  return obj;
+}
+
+const PARSERS = { syslog: parseSyslog, windows: parseWindows, app_json: parseAppJson };
+
+/* =========================================================================
+   NORMALIZE  ->  parsed fields  =>  common ECS-like schema
+   ========================================================================= */
+function winLevelToLog(level){
+  return { 'Critical':'error','Error':'error','Warning':'warn','Information':'info','Verbose':'debug' }[level] || 'info';
+}
+function winOutcome(eventId){
+  if(eventId===4624) return 'success';
+  if(eventId===4625) return 'failure';
+  return 'unknown';
+}
+
+function normalize(sourceType, parsed, rawTs){
+  const now = new Date().toISOString();
+  if(sourceType==='syslog'){
+    return {
+      '@timestamp': now, // demo: real impl would parse the RFC3164 ts w/ year inference
+      'ecs.version':'1.0',
+      'event.dataset':'syslog',
+      'event.action': parsed.proc,
+      'event.outcome': /failed|fail/i.test(parsed.message) ? 'failure' : (/accepted|opened|completed/i.test(parsed.message) ? 'success' : 'unknown'),
+      'event.severity': parsed.severity,
+      'log.level': parsed.severity<=3 ? 'error' : parsed.severity<=4 ? 'warn' : 'info',
+      'host.name': parsed.host,
+      'source.ip': (parsed.message.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)||[])[1] || null,
+      'user.name': null,
+      'process.name': parsed.proc,
+      'message': parsed.message
+    };
+  }
+  if(sourceType==='windows'){
+    return {
+      '@timestamp': parsed.TimeCreated || now,
+      'ecs.version':'1.0',
+      'event.dataset':'windows',
+      'event.action': 'EventID:'+parsed.EventID,
+      'event.outcome': winOutcome(parsed.EventID),
+      'event.severity': parsed.Level==='Critical'?1:parsed.Level==='Error'?3:parsed.Level==='Warning'?4:6,
+      'log.level': winLevelToLog(parsed.Level),
+      'host.name': parsed.Computer,
+      'source.ip': parsed.IpAddress || null,
+      'user.name': parsed.User || null,
+      'process.name': null,
+      'message': parsed.Message
+    };
+  }
+  if(sourceType==='app_json'){
+    return {
+      '@timestamp': parsed.ts || now,
+      'ecs.version':'1.0',
+      'event.dataset':'app_json',
+      'event.action': parsed.service,
+      'event.outcome': parsed.status>=500 ? 'failure' : parsed.status>=200 ? 'success' : 'unknown',
+      'event.severity': parsed.level==='error'?3:parsed.level==='warn'?4:6,
+      'log.level': parsed.level,
+      'host.name': parsed.service,
+      'source.ip': parsed.ip || null,
+      'user.name': parsed.user || null,
+      'process.name': parsed.service,
+      'message': parsed.msg
+    };
+  }
+  throw new Error('unknown source type');
+}
+
+/* =========================================================================
+   SCHEMA VALIDATION
+   ========================================================================= */
+const REQUIRED_SCHEMA_FIELDS = ['@timestamp','event.dataset','host.name','message'];
+
+function validateEvent(evt){
+  for(const f of REQUIRED_SCHEMA_FIELDS){
+    if(evt[f]===undefined || evt[f]===null || evt[f]===''){
+      return { valid:false, reason:`schema validation failed: missing "${f}"` };
+    }
+  }
+  if(isNaN(Date.parse(evt['@timestamp']))){
+    return { valid:false, reason:'schema validation failed: "@timestamp" is not a valid ISO8601 timestamp' };
+  }
+  if(typeof evt['message'] !== 'string' || evt['message'].trim().length===0){
+    return { valid:false, reason:'schema validation failed: "message" is empty' };
+  }
+  return { valid:true };
+}
+
+/* =========================================================================
+   PIPELINE:  raw + sourceType  ->  { ok, event? , reason? }
+   ========================================================================= */
+function ingest(sourceType, raw, {record=true}={}){
+  state.total++;
+  let parsed, evt;
+  try{
+    parsed = PARSERS[sourceType](raw);
+  }catch(e){
+    if(record) toDLQ(sourceType, raw, 'parse error: '+e.message);
+    return { ok:false, reason:'parse error: '+e.message };
+  }
+  try{
+    evt = normalize(sourceType, parsed);
+  }catch(e){
+    if(record) toDLQ(sourceType, raw, 'normalize error: '+e.message);
+    return { ok:false, reason:'normalize error: '+e.message };
+  }
+  const v = validateEvent(evt);
+  if(!v.valid){
+    if(record) toDLQ(sourceType, raw, v.reason);
+    return { ok:false, reason:v.reason };
+  }
+  if(record) toEvents(sourceType, evt);
+  return { ok:true, event:evt };
+}
+
+function toEvents(sourceType, evt){
+  state.ok++;
+  state.bySource[sourceType]++;
+  state.events.unshift(evt);
+  if(state.events.length>MAX_ROWS) state.events.pop();
+}
+
+function toDLQ(sourceType, raw, reason){
+  state.dlq++;
+  state.dlqEvents.unshift({ ts: new Date().toISOString(), sourceGuess: sourceType, reason, raw });
+  if(state.dlqEvents.length>MAX_ROWS) state.dlqEvents.pop();
+}
+
+/* =========================================================================
+   COLLECTORS  (live simulated streams)
+   ========================================================================= */
+function toggleCollector(type){
+  const c = collectors[type];
+  const btn = document.getElementById(`collector-${type}-btn`) || event.target;
+  const card = document.getElementById(`collector-${type}`);
+  const tag = document.getElementById(`collector-${type}-tag`);
+  if(c.timer){
+    clearInterval(c.timer);
+    c.timer = null;
+    card.classList.remove('live');
+    tag.textContent = 'idle';
+    if(btn) btn.textContent = 'Start stream';
+  } else {
+    c.timer = setInterval(()=>{
+      const bad = Math.random() < 0.04;
+      const raw = GENERATORS[type](bad);
+      ingest(type, raw);
+      c.count++;
+      document.getElementById(`collector-${type}-count`).textContent = c.count;
+      renderDashboard();
+    }, 450);
+    card.classList.add('live');
+    tag.textContent = 'streaming';
+    if(btn) btn.textContent = 'Stop stream';
+  }
+  updateHeaderMeta();
+}
+
+function injectOne(type){
+  const bad = Math.random() < 0.15;
+  const raw = GENERATORS[type](bad);
+  ingest(type, raw);
+  collectors[type].count++;
+  document.getElementById(`collector-${type}-count`).textContent = collectors[type].count;
+  renderDashboard();
+}
+
+function updateHeaderMeta(){
+  const live = Object.values(collectors).filter(c=>c.timer).length;
+  document.getElementById('live-collector-count').textContent = live;
+}
+
+/* =========================================================================
+   MANUAL INGEST PANEL
+   ========================================================================= */
+function quickFill(){
+  const which = document.getElementById('manual-quickfill').value;
+  const src = document.getElementById('manual-source').value;
+  if(!which) return;
+  document.getElementById('manual-raw').value = GENERATORS[src](which==='bad');
+}
+
+function manualIngest(){
+  const src = document.getElementById('manual-source').value;
+  const raw = document.getElementById('manual-raw').value.trim();
+  const resultBox = document.getElementById('manual-result');
+  const verdict = document.getElementById('manual-verdict');
+  const output = document.getElementById('manual-output');
+  if(!raw){
+    resultBox.classList.remove('hidden');
+    verdict.className = 'verdict fail';
+    verdict.textContent = 'NO INPUT';
+    output.textContent = 'Paste a raw log line first, or use Quick fill.';
+    return;
+  }
+  const res = ingest(src, raw); // recorded into events/DLQ + dashboard like any other source
+  resultBox.classList.remove('hidden');
+  if(res.ok){
+    verdict.className = 'verdict ok';
+    verdict.textContent = 'NORMALIZED OK';
+    output.textContent = JSON.stringify(res.event, null, 2);
+  } else {
+    verdict.className = 'verdict fail';
+    verdict.textContent = 'DEAD-LETTERED';
+    output.textContent = res.reason;
+  }
+  renderDashboard();
+}
+
+function clearManual(){
+  document.getElementById('manual-raw').value = '';
+  document.getElementById('manual-result').classList.add('hidden');
+}
+
+/* =========================================================================
+   THROUGHPUT TEST
+   ========================================================================= */
+async function runThroughputTest(){
+  const count = parseInt(document.getElementById('tp-count').value,10);
+  const btn = document.getElementById('tp-run-btn');
+  const progress = document.getElementById('tp-progress');
+  btn.disabled = true;
+  progress.style.width='0%';
+
+  const sources = ['syslog','windows','app_json'];
+  const CHUNK = 2000;
+  let done = 0, ok = 0, fail = 0;
+  const start = performance.now();
+
+  while(done < count){
+    const thisChunk = Math.min(CHUNK, count-done);
+    for(let i=0;i<thisChunk;i++){
+      const src = sources[Math.floor(Math.random()*3)];
+      const bad = Math.random() < 0.05;
+      const raw = GENERATORS[src](bad);
+      // don't record every single one into the live tables (would be 200k DOM rows);
+      // sample a fraction into the dashboard so it stays representative.
+      const record = Math.random() < 0.02;
+      const res = ingest(src, raw, {record});
+      if(res.ok) ok++; else fail++;
+    }
+    done += thisChunk;
+    progress.style.width = Math.round(done/count*100)+'%';
+    // yield to the event loop so the progress bar actually paints
+    await new Promise(r=>setTimeout(r,0));
+  }
+
+  const elapsedMs = performance.now() - start;
+  const eps = Math.round(count / (elapsedMs/1000));
+  if(eps > state.peakEps) state.peakEps = eps;
+
+  document.getElementById('tp-eps').textContent = eps.toLocaleString();
+  document.getElementById('tp-elapsed').textContent = (elapsedMs/1000).toFixed(2)+'s';
+  document.getElementById('tp-ok').textContent = ok.toLocaleString();
+  document.getElementById('tp-fail').textContent = fail.toLocaleString();
+
+  btn.disabled = false;
+  renderDashboard();
+}
+
+/* =========================================================================
+   DASHBOARD RENDER
+   ========================================================================= */
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderDashboard(){
+  document.getElementById('stat-total').textContent = state.total.toLocaleString();
+  document.getElementById('stat-ok').textContent = state.ok.toLocaleString();
+  document.getElementById('stat-dlq').textContent = state.dlq.toLocaleString();
+  document.getElementById('stat-ok-pct').textContent = state.total ? (state.ok/state.total*100).toFixed(1)+'% of total' : '—';
+  document.getElementById('stat-dlq-pct').textContent = state.total ? (state.dlq/state.total*100).toFixed(1)+'% of total' : '—';
+  document.getElementById('stat-peak-eps').textContent = state.peakEps.toLocaleString();
+  document.getElementById('header-buffered').textContent = (state.events.length + state.dlqEvents.length).toLocaleString();
+
+  renderEventsTable();
+  renderDlqTable();
+  renderBarChart();
+}
+
+function renderEventsTable(){
+  const tbody = document.getElementById('events-tbody');
+  if(state.events.length===0){
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No events yet — start a collector or run the throughput test.</td></tr>';
+    return;
+  }
+  const rows = state.events.slice(0,40).map(e=>`
+    <tr>
+      <td>${escapeHtml(new Date(e['@timestamp']).toLocaleTimeString())}</td>
+      <td><span class="badge ${e['event.dataset']}">${e['event.dataset']}</span></td>
+      <td>${escapeHtml(e['host.name'])}</td>
+      <td>${escapeHtml(e['event.action'])}</td>
+      <td>${escapeHtml(e['event.outcome'])}</td>
+      <td>${escapeHtml(e['user.name'] ?? '—')}</td>
+      <td title="${escapeHtml(e['message'])}">${escapeHtml(e['message'])}</td>
+    </tr>`).join('');
+  tbody.innerHTML = rows;
+}
+
+function renderDlqTable(){
+  const tbody = document.getElementById('dlq-tbody');
+  if(state.dlqEvents.length===0){
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="4">Dead-letter queue is empty.</td></tr>';
+    return;
+  }
+  const rows = state.dlqEvents.slice(0,40).map(d=>`
+    <tr>
+      <td>${escapeHtml(new Date(d.ts).toLocaleTimeString())}</td>
+      <td><span class="badge err">${escapeHtml(d.sourceGuess)}</span></td>
+      <td>${escapeHtml(d.reason)}</td>
+      <td title="${escapeHtml(d.raw)}">${escapeHtml(d.raw.slice(0,60))}${d.raw.length>60?'…':''}</td>
+    </tr>`).join('');
+  tbody.innerHTML = rows;
+}
+
+function renderBarChart(){
+  const svg = document.getElementById('bar-chart');
+  const total = state.bySource.syslog + state.bySource.windows + state.bySource.app_json;
+  const colors = { syslog:'#5eead4', windows:'#ffb454', app_json:'#b48cff' };
+  const labels = { syslog:'syslog', windows:'windows', app_json:'app_json' };
+  const keys = ['syslog','windows','app_json'];
+  const barH = 30, gap = 16, top = 8;
+  let svgContent = '';
+  keys.forEach((k,i)=>{
+    const y = top + i*(barH+gap);
+    const pct = total ? state.bySource[k]/total : 0;
+    const w = Math.max(total ? pct*440 : 0, state.bySource[k]>0?4:0);
+    svgContent += `
+      <text x="0" y="${y+barH/2+4}" fill="#7d8b96" font-size="11" font-family="IBM Plex Mono, monospace">${labels[k]}</text>
+      <rect x="90" y="${y}" width="440" height="${barH}" rx="4" fill="#0d1319" stroke="#232d36"/>
+      <rect x="90" y="${y}" width="${w}" height="${barH}" rx="4" fill="${colors[k]}" opacity="0.85"/>
+      <text x="${90+440+10}" y="${y+barH/2+4}" fill="#dbe4ea" font-size="11" font-family="IBM Plex Mono, monospace">${state.bySource[k].toLocaleString()}</text>
+    `;
+  });
+  svg.innerHTML = svgContent;
+}
+
+/* =========================================================================
+   PULSE STRIP (signature ambient element — event heartbeat)
+   ========================================================================= */
+(function(){
+  const canvas = document.getElementById('pulse-canvas');
+  const ctx = canvas.getContext('2d');
+  let w,h;
+  function resize(){
+    w = canvas.width = canvas.clientWidth * devicePixelRatio;
+    h = canvas.height = canvas.clientHeight * devicePixelRatio;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  let lastTotal = 0;
+  const history = new Array(160).fill(0);
+
+  function tick(){
+    const delta = state.total - lastTotal;
+    lastTotal = state.total;
+    history.shift();
+    history.push(delta);
+
+    ctx.clearRect(0,0,w,h);
+    const max = Math.max(1, ...history);
+    const stepX = w / (history.length-1);
+    ctx.beginPath();
+    history.forEach((v,i)=>{
+      const x = i*stepX;
+      const y = h - (v/max) * (h*0.8) - h*0.1;
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    });
+    ctx.strokeStyle = '#ffb454';
+    ctx.lineWidth = 1.5*devicePixelRatio;
+    ctx.shadowColor = '#ffb454';
+    ctx.shadowBlur = 6;
+    ctx.stroke();
+
+    // baseline
+    ctx.beginPath();
+    ctx.moveTo(0,h-h*0.1);
+    ctx.lineTo(w,h-h*0.1);
+    ctx.strokeStyle = 'rgba(255,180,84,0.15)';
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+
+/* =========================================================================
+   INIT
+   ========================================================================= */
+renderDashboard();
+</script>
+</body>
+</html>
